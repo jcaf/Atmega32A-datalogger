@@ -357,7 +357,7 @@ void key_initialization(void)
         key[i].bf.OnKeyPressedAndKeyRelease = 0;
         key[i].bf.AtTimeExpired = 0;
         key[i].bf.Reptt = 0;
-        key[i].num_group_x = 0;
+        key[i].num_group_x = 1;
         key[i].repp.to_start= 500.0/5;
         key[i].repp.after_start = 200.0/5;
     }
