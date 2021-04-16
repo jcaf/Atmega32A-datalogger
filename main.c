@@ -3,6 +3,21 @@
  *
  *  Created on: Apr 13, 2021
  *      Author: jcaf
+
+ 1) programar fuse (PRESERVANDO EEPROM)
+ avrdude -c usbasp -B5 -p m32 -U lfuse:w:0xbf:m -U hfuse:w:0xc7:m
+
+ 2)
+ [root@JCAFPC Release]# avrdude -c usbasp -B5 -p m32 -U flash:w:.hex
+ [root@JCAFPC Release]# avrdude -c usbasp -B0.3 -p m32 -V -U flash:w:.hex
+ GRABAR LA EEPROM
+ [jcaf@jcafpc Release]$ avrdude -c usbasp -B4 -p m32 -V -U eeprom:w:digitalFryer.eep
+
+ * Verificar los fuses
+ [jcaf@jcafpc Release]$ avrdude -c usbasp -B4 -p m32 -U lfuse:r:-:i -v
+
+ Atmega32A proteger flash (modo 3): lectura y escritura
+ avrdude -c usbasp -B10 -p m32 -U lock:w:0xFC:m
  */
 #include "system.h"
 #include "types.h"
