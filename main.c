@@ -68,19 +68,56 @@ float batteryVoltTypeArr[BATTERYVOLTTYPE_NUMMAX] = {12,24};//Solo 2 tipos de bat
 char str_batteryVoltType[10];
 
 /*
- * return update VoltBatt
+ * ADC CHANNEL 1
+ * ADC calibration, Medir en ckto
+ * AREF Nominal(5V), Medido =
+ * R1 Nominal(100k), Medido =
+ * R2 Nominal(510k), Medido =
+ *
+ * INTERNAL AREF NOMINAL(5)
+ *
+ * VCC
+ * | (510K)
+ * R2
+ * |
+ * +---->
+ * |
+ * R1 (100K)
+ * |
+ * GND
+ *
+ */
+#define ADCH1_R1 100E3	//MEDIR
+#define ADCH1_R2 510E3	//MEDIR
+#define ADC_AREF 5		//5V MEDIR
+#define ADC_TOP 1023	//KTE
+/*
+ * update VoltBatt
  */
 int8_t VoltBatt_get(void)//Non-blocking
 {
+	float smoothADCHL = 0;
 	VoltBatt_buffer[measVoltBatt.counter] = ADC_read(ADC_CH_1);
 	if (++measVoltBatt.counter >= SMOOTHALG_MAXSIZE)
 	{
 		measVoltBatt.counter = 0x0000;
-		VoltBatt = smoothAlg(VoltBatt_buffer);
+		smoothADCHL= smoothAlg(VoltBatt_buffer);
+		//
+		VoltBatt = (smoothADCHL * ADC_AREF * (ADCH1_R1 + ADCH1_R2) )/ (ADC_TOP * ADCH1_R1);
+		//
 		return 1;
 	}
 	return 0;
 }
+
+/*
+ * Voltage Generator 100v
+ */
+#define ADCH0_R1 33E3	//MEDIR
+#define ADCH0_R2 6.8E6	//MEDIR
+#define ADC_AREF 5		//5V MEDIR
+#define ADC_TOP 1023	//KTE
+float smoothGen_ADCHL=0;
 
 //---------------------------------------------------------------------------------------------
 //-------- Definicion del usuario de tiempos de manera general, excepto la secuencia para P1
@@ -145,6 +182,8 @@ void lcdan_print_Menu3(void)
 	lcdan_set_cursor(0, 1);	lcdan_print_string(str);
 	lcdan_str_lineformat_align_P(str, PSTR("PROGRESO"), 0);
 	lcdan_set_cursor(0, 2);	lcdan_print_string(str);
+	lcdan_str_lineformat_align_P(str, PSTR(""), LCDAN_STR_FORMAT_ALIGN_CENTER);
+	lcdan_set_cursor(0, 3);	lcdan_print_string(str);
 }
 
 void outputs_clear(void)
@@ -345,7 +384,7 @@ int main(void)
 	strcpy(str_batteryVoltType,"[");
 	dtostrf(batteryVoltType, 0, 0, str);
 	strcat(str_batteryVoltType, str);
-	strcat(str_batteryVoltType, " V]");
+	strcat(str_batteryVoltType, "V]");
 	//
 
 	//lcdan_print_Introduction();
@@ -381,14 +420,14 @@ int main(void)
 					main_flag.X1onoff = !main_flag.X1onoff;
 
 					if (main_flag.X1onoff == 1)
-					{lcdan_print_string("X1");
+					{
 
-/*						lcdan_bklight_on();
+						lcdan_bklight_on();
 						keyX1.f.job = 1;
 
 						buzzer.mode = BUZZERMODE_TACTSW;
 						buzzer.f.job = 1;
-	*/				}
+					}
 					else
 					{
 						lcdan_clear();
@@ -398,6 +437,7 @@ int main(void)
 						keyA = keyB = keyC = keyX2 = keyX3 = keyX4 = keyX5 = emptyJob;
 						measVoltBatt = measVoltGenerador = emptyJob;
 						keyP1 = keyP2 = emptyJob;
+						PinTo0(PORTWxBUZZER, PINxBUZZER);
 						buzzer = emptyJob;
 					}
 
@@ -409,8 +449,8 @@ int main(void)
 					 * A, B, C solo se activan cuando X2 y X3 estan activos
 					 */
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_A))
-					{lcdan_print_string("A");
-/*						if (keyA.f.enable)
+					{
+						if (keyA.f.enable)
 						{
 							keyA.f.job = 1;
 
@@ -421,10 +461,10 @@ int main(void)
 							buzzer.mode = BUZZERMODE_TACTSW;
 							buzzer.f.job = 1;
 						}
-*/					}
+					}
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_B))
-					{lcdan_print_string("B");
-/*						if (keyB.f.enable)
+					{
+						if (keyB.f.enable)
 							{
 							if (keyB.f.lock == 0)
 							{
@@ -443,10 +483,10 @@ int main(void)
 							keyP2.f.enable = 0;
 							//
 						}
-*/					}
+					}
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_C))
-					{lcdan_print_string("C");
-/*						if (keyC.f.enable)
+					{
+						if (keyC.f.enable)
 						{
 							if (keyC.f.lock == 0)
 							{
@@ -465,11 +505,11 @@ int main(void)
 							keyP2.f.enable = 0;
 							//
 						}
-*/					}
+					}
 
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_X2))
-					{lcdan_print_string("X2");
-/*						if (!keyX3.f.job)//mientras no acabe el proceso de X3
+					{
+						if (!keyX3.f.job)//mientras no acabe el proceso de X3
 						{
 							keyX2.f.job = 1;
 
@@ -480,13 +520,14 @@ int main(void)
 
 							//
 							buzzer.mode = BUZZERMODE_TACTSW;
+							buzzer.sm0 = 0;
 							buzzer.f.job = 1;
 						}
-*/					}
+					}
 
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_X3))
-					{lcdan_print_string("X3");
-/*						//reinicia proceso cada vez que es pulsado o se bloquea hasta que termine todo el job ???
+					{
+						//reinicia proceso cada vez que es pulsado o se bloquea hasta que termine todo el job ???
 						//si pasa a otra tarea, 'esta termina en su propia hilo? o es terminada al conmutar
 						keyX3.f.job = 1;
 
@@ -498,12 +539,13 @@ int main(void)
 
 						//
 						buzzer.mode = BUZZERMODE_X3_SEQUENCER;
+						buzzer.sm0 = 0;
 						buzzer.f.job = 1;
-*/					}
+					}
 
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_X4))
-					{lcdan_print_string("X4");
-/*						if (!keyX3.f.job)//mientras no acabe el proceso de X3
+					{
+						if (!keyX3.f.job)//mientras no acabe el proceso de X3
 						{
 							keyX4.f.job = 1;
 
@@ -517,10 +559,10 @@ int main(void)
 							buzzer.mode = BUZZERMODE_TACTSW;
 							buzzer.f.job = 1;
 						}
-*/					}
+					}
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_X5))
-					{lcdan_print_string("X5");
-/*						if (!keyX3.f.job)//mientras no acabe el proceso de X3
+					{
+						if (!keyX3.f.job)//mientras no acabe el proceso de X3
 						{
 							keyX5.f.job = 1;
 
@@ -534,7 +576,7 @@ int main(void)
 							buzzer.mode = BUZZERMODE_TACTSW;
 							buzzer.f.job = 1;
 						}
-*/					}
+					}
 
 					// Test P1, P2
 					//pinGetLevel_job();
@@ -593,10 +635,9 @@ int main(void)
 							keyX1.sm0 = 0;
 							keyX1.f.job = 0;
 
-		//while (1);
 							//desencadena en leer voltaje de bateria 12-24V nominal
-//							measVoltBatt.f.job = 1;
-//							measVoltBatt.counter = 0;
+							measVoltBatt.f.job = 1;
+							measVoltBatt.counter = 0;
 						}
 					}
 				}
@@ -740,6 +781,7 @@ int main(void)
 					if (keyP2_job())
 					{
 						keyX3.f.job = 0;	//finish sequence
+						PinTo0(PORTWxBUZZER, PINxBUZZER);
 						buzzer = emptyJob;
 					}
 				}
@@ -822,13 +864,17 @@ int main(void)
 			}
 			//
 			//ADC Generator 1000Vdc
+
 			if (measVoltGenerador.f.job)
 			{
 				VoltGenerator_buffer[measVoltGenerador.counter] = ADC_read(ADC_CH_0);
+
 				if (++measVoltGenerador.counter >= SMOOTHALG_MAXSIZE)
 				{
 					measVoltGenerador.counter = 0x0000;
-					VoltGenerator = smoothAlg(VoltGenerator_buffer);
+					smoothGen_ADCHL = smoothAlg(VoltGenerator_buffer);
+
+					VoltGenerator = (smoothGen_ADCHL*ADC_AREF*(ADCH0_R1 + ADCH0_R2))/(ADC_TOP*ADCH0_R1);
 					//
 					//print VoltGenerator
 					dtostrf(VoltGenerator, 0, 1, str);
@@ -877,8 +923,8 @@ int main(void)
 							{
 								PinToggle(PORTWxBUZZER, PINxBUZZER);
 								buzzer.counter = 0;
-								buzzer.sm0 = 0x0;
-								buzzer.f.job = 0;
+								//buzzer.sm0 = 0x0;
+								//buzzer.f.job = 0;
 							}
 						}
 					}
