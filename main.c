@@ -81,6 +81,7 @@ struct _job keyX1, keyA,keyB,keyC,keyX2,keyX3,keyX4,keyX5;
 struct _job measVoltBatt, measVoltGenerador;
 struct _job keyP1, keyP2;
 struct _job buzzer;
+struct _job progressBar;
 //
 float smoothAlg(uint16_t *buffer);
 #define SMOOTHALG_MAXSIZE 10
@@ -96,6 +97,7 @@ float batteryVoltTypeArr[BATTERYVOLTTYPE_NUMMAX] = {12,24};//Solo 2 tipos de bat
 #define BATTERY_KDIFF_FLOAT 5	//+- 5 volts
 char str_batteryVoltType[10];
 
+#define BATTERYVOLT_MINIMUM_ALERT 10//10 Volts
 /*
  * ADC CHANNEL 1
  * ADC calibration, Medir en ckto
@@ -183,12 +185,17 @@ void lcdan_print_Menu1(void)
 	strcat(buff, str_batteryVoltType);
 	lcdan_str_lineformat_align(str, buff, LCDAN_STR_FORMAT_ALIGN_CENTER);
 	lcdan_set_cursor(0, 0);	lcdan_print_string(str);
-	lcdan_str_lineformat_align_P(str, PSTR("VOLTAJE:"), 0);
+
+	lcdan_str_lineformat_align_P(str, PSTR(""), 0);
 	lcdan_set_cursor(0, 1);	lcdan_print_string(str);
-	lcdan_str_lineformat_align_P(str, PSTR("NIVEL"), 0);
+
+	lcdan_str_lineformat_align_P(str, PSTR("VOLTAJE:"), 0);
 	lcdan_set_cursor(0, 2);	lcdan_print_string(str);
+
 	lcdan_str_lineformat_align_P(str, PSTR(""), LCDAN_STR_FORMAT_ALIGN_CENTER);
 	lcdan_set_cursor(0, 3);	lcdan_print_string(str);
+
+
 }
 void lcdan_print_Menu2(void)
 {
@@ -230,6 +237,17 @@ void outputs_clear(void)
 	PinTo0(PORTWxOUT_S, PINxOUT_S);
 	PinTo0(PORTWxOUT_T, PINxOUT_T);
 }
+/*
+ * Tiempos en milisegundos
+ */
+#define P1_T1 20
+#define P1_T2 80
+#define P1_T3 6000
+#define P1_T4 6020
+#define P1_T5 6120
+
+//#define P1JOB_TOTALTIME (P1_T1 + P1_T2 + P1_T3 + P1_T4 + P1_T5)
+#define P1JOB_TOTALTIME (P1_T5)
 
 int8_t keyP1_job(void)//secuencia
 {
@@ -246,7 +264,7 @@ int8_t keyP1_job(void)//secuencia
 	{
 		if (main_flag.f1ms)
 		{
-			if (++keyP1.counter >= 20)
+			if (++keyP1.counter >= P1_T1)//20)
 			{
 				PinTo0(PORTWxOUT_S, PINxOUT_S);
 				keyP1.sm0++;
@@ -257,7 +275,7 @@ int8_t keyP1_job(void)//secuencia
 	{
 		if (main_flag.f1ms)
 		{
-			if (++keyP1.counter >= 80)
+			if (++keyP1.counter >= P1_T2)//80)
 			{
 				PinTo1(PORTWxOUT_R, PINxOUT_R);
 				keyP1.sm0++;
@@ -268,7 +286,7 @@ int8_t keyP1_job(void)//secuencia
 	{
 		if (main_flag.f1ms)
 		{
-			if (++keyP1.counter >= 6000)
+			if (++keyP1.counter >= P1_T3)//6000)
 			{
 				PinTo1(PORTWxOUT_T, PINxOUT_T);
 				keyP1.sm0++;
@@ -279,7 +297,7 @@ int8_t keyP1_job(void)//secuencia
 	{
 		if (main_flag.f1ms)
 		{
-			if (++keyP1.counter >= 6020)
+			if (++keyP1.counter >= P1_T4)//6020)
 			{
 				PinTo0(PORTWxOUT_T, PINxOUT_T);
 				keyP1.sm0++;
@@ -290,7 +308,7 @@ int8_t keyP1_job(void)//secuencia
 	{
 		if (main_flag.f1ms)
 		{
-			if (++keyP1.counter >= 6120)
+			if (++keyP1.counter >= P1_T5)//6120)
 			{
 				PinTo0(PORTWxOUT_R, PINxOUT_R);
 				//
@@ -335,6 +353,47 @@ int8_t keyP2_job(void)
 	return 0;
 }
 
+#define P2JOB_TOTALTIME KEY_TIMEPRESSING
+
+#define X3_DELAY_SECONDS_FROM_P1_TO_P2 8//Seg
+
+#define X3JOB_TOTALTIME_MS ( RELAY_TIMESWITCHING + P1JOB_TOTALTIME + (X3_DELAY_SECONDS_FROM_P1_TO_P2*1000) + P2JOB_TOTALTIME)//millisec
+
+#define PROGRESSBAR_SLOTTIME ((int)( (X3JOB_TOTALTIME_MS*1.0f) / LCD_COL))
+
+
+
+//
+void lcdan_progressbarHor(int8_t coli, int8_t colf, int8_t row)
+{
+	for (int i=coli; i<colf; i++)
+	{
+		lcdan_set_cursor(i, row);
+		lcdan_write_data(0xff); //caracter barra
+	}
+}
+void progressBarJob(void)
+{
+	if (progressBar.f.job)//progress bar
+	{
+		if (main_flag.f1ms)
+		{
+			progressBar.counter++;
+			if ( progressBar.counter % PROGRESSBAR_SLOTTIME == 0)
+			{
+
+				lcdan_progressbarHor(0, (int8_t)(((progressBar.counter*1.0f) /X3JOB_TOTALTIME_MS ) * LCD_COL ), 3);
+
+
+				if (progressBar.counter >= X3JOB_TOTALTIME_MS)
+				{
+					progressBar.counter = 0x00;
+					progressBar.f.job = 0;
+				}
+			}
+		}
+	}
+}
 
 
 int main(void)
@@ -419,6 +478,7 @@ int main(void)
 	strcat(str_batteryVoltType, str);
 	strcat(str_batteryVoltType, "V]");
 	//
+
 
 	while (1)
 	{
@@ -541,6 +601,7 @@ int main(void)
 								keyX2.f.lock = 1;//bloqueado
 								keyX3 = keyX4 = keyX5 = emptyJob;
 								measVoltBatt = measVoltGenerador = emptyJob;
+								progressBar = emptyJob;
 								//
 								keyX2.f.job = 1;
 								//
@@ -615,6 +676,7 @@ int main(void)
 							{
 								keyX2 = keyX3 = keyX5 = emptyJob;
 								measVoltBatt = measVoltGenerador = emptyJob;
+								progressBar = emptyJob;
 								//
 								PinTo0(PORTWxOUT_1, PINxOUT_1);
 								PinTo0(PORTWxOUT_2, PINxOUT_2);
@@ -642,7 +704,8 @@ int main(void)
 						{
 							keyX2 = keyX3 = keyX4 = emptyJob;
 							measVoltBatt = measVoltGenerador = emptyJob;
-							//keyX3 = emptyJob;//X3 Clear all flags/states
+							progressBar = emptyJob;
+
 							//
 							PinTo0(PORTWxOUT_1, PINxOUT_1);
 							PinTo0(PORTWxOUT_2, PINxOUT_2);
@@ -717,6 +780,10 @@ int main(void)
 				}
 			}
 		}
+		//++++++
+		//progressBarJob();
+		//++++++++
+
 
 		if (main_flag.X1onoff == 1)
 		{
@@ -845,8 +912,12 @@ int main(void)
 			{
 				if (keyX3.sm0 == 0)
 				{
-					//lcdan_print_Menu3();//--> Se muestra en el primer toque
+					//EJEC #1
+					lcdan_print_Menu3();//--> Se muestra en el primer toque
+										//pero vuelvo a imprimir para que limpie el progressBar
 					//
+					progressBar.f.job = 1;//progress bar
+
 					PinTo1(PORTWxOUT_4, PINxOUT_4);
 
 					//kill both
@@ -872,6 +943,7 @@ int main(void)
 				}
 				else if (keyX3.sm0 == 2)
 				{
+					//EJEC #2
 					if (keyP1_job())
 					{
 						keyX3.sm0++;
@@ -881,7 +953,8 @@ int main(void)
 				{
 					if (main_flag.f1ms)
 					{
-						if (++keyX3.counter >= 1000*8)
+						//delay 8s + EJEC #3
+						if (++keyX3.counter >= 1000*X3_DELAY_SECONDS_FROM_P1_TO_P2)
 						{
 							keyX3.counter = 0x0000;
 							keyX3.sm0++;
@@ -1004,13 +1077,25 @@ int main(void)
 				{
 					//print VoltBatt
 					dtostrf(VoltBatt, 0, 1, str);
-					lcdan_set_cursor(9, 1);
+					lcdan_set_cursor(9, 2);
 					lcdan_print_string(str);
+					//
+					lcdan_set_cursor(0, 3);
+
+					if ( VoltBatt <= BATTERYVOLT_MINIMUM_ALERT)
+					{
+						lcdan_str_lineformat_align_P(str, PSTR("RECARGAR BATERIA"), LCDAN_STR_FORMAT_ALIGN_CENTER);
+						lcdan_print_string(str);
+					}
+					else
+					{
+						lcdan_str_lineformat_align_P(str, PSTR("BATERIA OK"), LCDAN_STR_FORMAT_ALIGN_CENTER);
+						lcdan_print_string(str);
+					}
 				}
 			}
 			//
 			//ADC Generator 1000Vdc
-
 			if (measVoltGenerador.f.job)
 			{
 				VoltGenerator_buffer[measVoltGenerador.counter] = ADC_read(ADC_CH_0);
@@ -1025,7 +1110,8 @@ int main(void)
 					//print VoltGenerator
 					dtostrf(VoltGenerator, 0, 1, str);
 					strcat(str, "V     ");
-					lcdan_set_cursor(8, 3); lcdan_print_string(str);
+					lcdan_set_cursor(8, 3);
+					lcdan_print_string(str);
 				}
 			}
 			//Buzzer
@@ -1076,7 +1162,8 @@ int main(void)
 					}
 				}
 			}
-
+			//
+			progressBarJob();
 			//
 
 		}//if onoff
@@ -1136,3 +1223,6 @@ float smoothAlg(uint16_t *buffer)
 	A = average + ( ( (Pos-Neg)*TD )/ (SMOOTHALG_MAXSIZE*SMOOTHALG_MAXSIZE));
 	return A;
 }
+
+//
+
