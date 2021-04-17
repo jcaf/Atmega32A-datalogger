@@ -18,6 +18,19 @@
 
  Atmega32A proteger flash (modo 3): lectura y escritura
  avrdude -c usbasp -B10 -p m32 -U lock:w:0xFC:m
+
+Consistenciado:
+--------------
+APAGAR OUT1, SOLO EN MENU 1 PRENDER
+APAGAR OUT2, SOLO EN MENU 2 PRENDER
+PRIMER TOQUE EN X3, HABILITA A,B,C, SEGUNDO TOQUE EN X3, DESH.A,B,C
+MENU1-> OUT1
+MENU2-> OUT2
+X3 - > TERMINA TODA LA SECUENCIA Y DEJA OUT3,OUT4 A CERO
+X3 - > BUCLE OK
+X4 -> ACTIVA OUT1
+X5 -> ACTIVA OUT2
+
  */
 #include "system.h"
 #include "types.h"
@@ -45,7 +58,8 @@ struct _main_flag
 
 struct _job
 {
-	int8_t sm0;
+	int8_t sm0;//x jobs
+	int8_t key_sm0;//x keys
 	uint16_t counter;
 	int8_t mode;
 
@@ -61,8 +75,8 @@ struct _job
 #define BUZZERMODE_TACTSW 0
 #define BUZZERMODE_X3_SEQUENCER 1
 
-//
-struct _job emptyJob;
+//static
+const struct _job emptyJob;
 struct _job keyX1, keyA,keyB,keyC,keyX2,keyX3,keyX4,keyX5;
 struct _job measVoltBatt, measVoltGenerador;
 struct _job keyP1, keyP2;
@@ -143,8 +157,8 @@ float smoothGen_ADCHL=0;
 #define MENU_INTRODUCTION_AFTERDELAY_SEG 1//5 Seconds delay x Menu Introduccion
 
 //buzzer delays
-#define BUZZER_TACTSW_KTIME 100//100ms
-#define BUZZER_X3_KTIME 300//300ms
+#define BUZZER_TACTSW_KTIME 50	//50ms
+#define BUZZER_X3_KTIME 500		//500ms x Secuencia de P1
 
 //---------------------------------------------------------------------------------------------
 
@@ -217,7 +231,7 @@ void outputs_clear(void)
 	PinTo0(PORTWxOUT_T, PINxOUT_T);
 }
 
-int8_t keyP1_job(void)
+int8_t keyP1_job(void)//secuencia
 {
 	if (keyP1.sm0 == 0)
 	{
@@ -282,7 +296,9 @@ int8_t keyP1_job(void)
 				//
 				keyP1.counter = 0x0000;
 				keyP1.sm0 = 0x00;
-				//keyP1.f.job = 0;
+
+				keyP1.f.job = 0;
+
 				return 1;
 			}
 		}
@@ -299,7 +315,7 @@ int8_t keyP2_job(void)
 		keyP2.counter = 0x0000;
 		keyP2.sm0++;
 	}
-	else if (keyP2.sm0 == 0)
+	else if (keyP2.sm0 == 1)
 	{
 		if (main_flag.f1ms)
 		{
@@ -309,7 +325,9 @@ int8_t keyP2_job(void)
 				//
 				keyP2.counter = 0x0000;
 				keyP2.sm0 = 0x00;
-				//keyP2.f.job = 0;
+
+				keyP2.f.job = 0;
+
 				return 1;
 			}
 		}
@@ -375,8 +393,8 @@ int main(void)
 
 	//Config to 1ms
 	TCNT0 = 0x00;
-	TCCR0 = (1 << WGM01) | (1 << CS02) | (0 << CS01) | (1 << CS00); //CTC, PRES=1024
-	OCR0 = CTC_SET_OCR_BYTIME(1e-3, 1024);
+	TCCR0 = (1 << WGM01) | (0 << CS02) | (1 << CS01) | (1 << CS00); //CTC, PRES=64
+	OCR0 = CTC_SET_OCR_BYTIME(1e-3, 64);//1ms Exacto @PRES=64
 	//
 	TIMSK |= (1 << OCIE0);
 	sei();
@@ -401,12 +419,6 @@ int main(void)
 	strcat(str_batteryVoltType, str);
 	strcat(str_batteryVoltType, "V]");
 	//
-
-	//lcdan_print_Introduction();
-	//_delay_ms(500);
-	//lcdan_print_Menu1();
-
-	//while (1);
 
 	while (1)
 	{
@@ -436,7 +448,6 @@ int main(void)
 
 					if (main_flag.X1onoff == 1)
 					{
-
 						lcdan_bklight_on();
 						keyX1.f.job = 1;
 
@@ -455,14 +466,10 @@ int main(void)
 						PinTo0(PORTWxBUZZER, PINxBUZZER);
 						buzzer = emptyJob;
 					}
-
 				}
 				if (main_flag.X1onoff == 1)
 				{
-					//Test el resto de teclas del teclado matricial 4x2
-					/*
-					 * A, B, C solo se activan cuando X2 y X3 estan activos
-					 */
+					//A, B, C solo se activan cuando X2 y X3 estan activos
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_A))
 					{
 						if (keyA.f.enable)
@@ -470,8 +477,8 @@ int main(void)
 							keyA.f.job = 1;
 
 							//Off other background/process/flags
-							keyP1.f.enable = 0;
-							keyP2.f.enable = 0;
+							//keyP1.f.enable = 0;
+							//keyP2.f.enable = 0;
 							//
 							buzzer.mode = BUZZERMODE_TACTSW;
 							buzzer.f.job = 1;
@@ -494,8 +501,8 @@ int main(void)
 							}
 
 							//Off other background/process/flags
-							keyP1.f.enable = 0;
-							keyP2.f.enable = 0;
+							//keyP1.f.enable = 0;
+							//keyP2.f.enable = 0;
 							//
 						}
 					}
@@ -514,71 +521,132 @@ int main(void)
 								buzzer.mode = BUZZERMODE_TACTSW;
 								buzzer.f.job = 1;
 							}
-
 							//Off other background/process/flags
-							keyP1.f.enable = 0;
-							keyP2.f.enable = 0;
+							//keyP1.f.enable = 0;
+							//keyP2.f.enable = 0;
 							//
 						}
 					}
 
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_X2))
 					{
-						if (!keyX3.f.job)//mientras no acabe el proceso de X3
+						if (!keyX2.f.lock)
 						{
-							keyX2.f.job = 1;
+							if (!keyX3.f.job)//mientras no acabe el proceso de X3
+							{
 
-							keyP1.f.enable = 1;//HABILITA BOTON P1 Y P2
-							keyP2.f.enable = 1;
-							//
-							keyA.f.enable = keyB.f.enable = keyC.f.enable = 1;//enable A,B,C
+								PinTo0(PORTWxOUT_1, PINxOUT_1);
+								PinTo0(PORTWxOUT_2, PINxOUT_2);
+								//
+								keyX2.f.lock = 1;//bloqueado
+								keyX3 = keyX4 = keyX5 = emptyJob;
+								measVoltBatt = measVoltGenerador = emptyJob;
+								//
+								keyX2.f.job = 1;
+								//
 
-							//
-							buzzer.mode = BUZZERMODE_TACTSW;
-							buzzer.sm0 = 0;
-							buzzer.f.job = 1;
+
+								keyP1.f.enable = 1;//HABILITA BOTON P1 Y P2
+								keyP2.f.enable = 1;
+								//
+								keyA.f.enable = keyB.f.enable = keyC.f.enable = 1;//enable A,B,C
+
+								//
+								buzzer.mode = BUZZERMODE_TACTSW;
+								buzzer.sm0 = 0;
+								buzzer.f.job = 1;
+							}
 						}
 					}
 
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_X3))
 					{
-						//reinicia proceso cada vez que es pulsado o se bloquea hasta que termine todo el job ???
-						//si pasa a otra tarea, 'esta termina en su propia hilo? o es terminada al conmutar
-						keyX3.f.job = 1;
+						if ( (!keyX3.f.job) && (!keyP1.f.job) )
+						{
+							if (keyX3.key_sm0 == 0)
+							{
+								keyX2 = keyX4 = keyX5 = emptyJob;
+								measVoltBatt = measVoltGenerador = emptyJob;
+								//
+								PinTo0(PORTWxOUT_1, PINxOUT_1);
+								PinTo0(PORTWxOUT_2, PINxOUT_2);
+								//
 
-						//Off other background/process/flags
-						keyP1.f.enable = 0;
-						keyP2.f.enable = 0;
-						//
-						keyA.f.enable = keyB.f.enable = keyC.f.enable = 1;//enable A,B,C
+								keyA.f.enable = keyB.f.enable = keyC.f.enable = 1;//enable A,B,C
+								//disable P1,P2.
+								//X3 NO bloquea aun las otras teclas X2/X4/X5, espera al segundo toque
+								keyP1.f.enable = 0;
+								keyP2.f.enable = 0;
+								//
+								keyX3.key_sm0++;
+								//
+								buzzer.mode = BUZZERMODE_TACTSW;
+								buzzer.sm0 = 0;
+								buzzer.f.job = 1;
+								//
+								lcdan_print_Menu3();
+							}
+							else if (keyX3.key_sm0 == 1)
+							{
+								keyA.f.enable = keyB.f.enable = keyC.f.enable = 0;//Disable A,B,C
+								//OJO: Mantiene los niveles actuales en que quedaron
+								//
+								//Bloquea X1,X2,X4 y X5 hasta que termine todo el job
+								//-->uso !job para bloquear
 
-						//
-						buzzer.mode = BUZZERMODE_X3_SEQUENCER;
-						buzzer.sm0 = 0;
-						buzzer.f.job = 1;
+								//keyX3.key_sm0 = 0x00; //Reingresa habilitando A,B,C
+								//
+								keyX3.f.job = 1;
+								keyX3.sm0 = 0;
+								//
+								buzzer.mode = BUZZERMODE_X3_SEQUENCER;
+								buzzer.sm0 = 0;
+								buzzer.f.job = 1;
+								//
+							}
+						}
 					}
 
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_X4))
 					{
-						if (!keyX3.f.job)//mientras no acabe el proceso de X3
+						if ((!keyX4.f.lock) && (!keyP1.f.job) )
 						{
-							keyX4.f.job = 1;
+							if (!keyX3.f.job)//mientras no acabe el proceso de X3
+							{
+								keyX2 = keyX3 = keyX5 = emptyJob;
+								measVoltBatt = measVoltGenerador = emptyJob;
+								//
+								PinTo0(PORTWxOUT_1, PINxOUT_1);
+								PinTo0(PORTWxOUT_2, PINxOUT_2);
+								//
+								keyX3 = emptyJob;//X3 Clear all flags/states
 
-							//Off other background/process/flags
-							keyP1.f.enable = 0;
-							keyP2.f.enable = 0;
-							//
-							keyA.f.enable = keyB.f.enable = keyC.f.enable = 0;//Disable A,B,C
+								keyX4.f.lock = 1;
+								keyX4.f.job = 1;
 
-							//
-							buzzer.mode = BUZZERMODE_TACTSW;
-							buzzer.f.job = 1;
+								//Off other background/process/flags
+								keyP1.f.enable = 0;
+								keyP2.f.enable = 0;
+								//
+								keyA.f.enable = keyB.f.enable = keyC.f.enable = 0;//Disable A,B,C
+
+								//
+								buzzer.mode = BUZZERMODE_TACTSW;
+								buzzer.f.job = 1;
+							}
 						}
 					}
-					if (kb_key_is_ready2read(KB_LYOUT_KEY_X5))
+					if (kb_key_is_ready2read(KB_LYOUT_KEY_X5))//X5 es el unico que puede volver a resetearse el mismo
 					{
-						if (!keyX3.f.job)//mientras no acabe el proceso de X3
+						if ( (!keyX3.f.job) && (!keyP1.f.job) )//mientras no acabe el proceso de X3
 						{
+							keyX2 = keyX3 = keyX4 = emptyJob;
+							measVoltBatt = measVoltGenerador = emptyJob;
+							//keyX3 = emptyJob;//X3 Clear all flags/states
+							//
+							PinTo0(PORTWxOUT_1, PINxOUT_1);
+							PinTo0(PORTWxOUT_2, PINxOUT_2);
+							//
 							keyX5.f.job = 1;
 
 							//Off other background/process/flags
@@ -586,7 +654,6 @@ int main(void)
 							keyP2.f.enable = 0;
 							//
 							keyA.f.enable = keyB.f.enable = keyC.f.enable = 0;//Disable A,B,C
-
 							//
 							buzzer.mode = BUZZERMODE_TACTSW;
 							buzzer.f.job = 1;
@@ -600,10 +667,25 @@ int main(void)
 					{
 						if (keyP1.f.enable)
 						{
-							if (pinGetLevel_level(PGLEVEL_LYOUT_P1)== 0)	//active in low
+							if (!keyP1.f.lock)
 							{
-								keyP1.f.job = 1;
+								if (pinGetLevel_level(PGLEVEL_LYOUT_P1)== 0)	//active in low
+								{
+									keyP1.f.lock = 1;
+									keyP2.f.lock = 1;
+
+									keyA.f.enable = keyB.f.enable = keyC.f.enable = 0;//Disable A,B,C
+									//
+									keyP1.f.job = 1;
+
+									//
+									buzzer.mode = BUZZERMODE_X3_SEQUENCER;
+									buzzer.sm0 = 0;
+									buzzer.f.job = 1;
+									//
+								}
 							}
+
 						}
 						//pinGetLevel_clearChange(PGLEVEL_LYOUT_P1);//-->clear flush in while-end
 					}
@@ -612,10 +694,22 @@ int main(void)
 					{
 						if (keyP2.f.enable)
 						{
-							if (pinGetLevel_level(PGLEVEL_LYOUT_P2)== 0)	//active in low
+							if (!keyP2.f.lock)
 							{
-								keyP1.f.job = 1;
+								if (pinGetLevel_level(PGLEVEL_LYOUT_P2)== 0)	//active in low
+								{
+									keyP1.f.lock = 1;
+									keyP2.f.lock = 1;
+									//
+									keyA.f.enable = keyB.f.enable = keyC.f.enable = 0;//Disable A,B,C
+									//
+									keyP2.f.job = 1;
+									//
+									buzzer.mode = BUZZERMODE_TACTSW;
+									buzzer.f.job = 1;
+								}
 							}
+
 						}
 						//pinGetLevel_clearChange(PGLEVEL_LYOUT_P2);//-->clear flush in while-end
 					}
@@ -631,7 +725,7 @@ int main(void)
 			{
 				if (keyX1.sm0 == 0)
 				{
-					PinTo1(PORTWxOUT_1, PINxOUT_1);
+					//PinTo1(PORTWxOUT_1, PINxOUT_1);
 					measVoltGenerador.f.job = 0;//kill meas.volt
 					lcdan_print_Introduction();	//x5seg
 					//
@@ -642,9 +736,11 @@ int main(void)
 				{
 					if (main_flag.f1ms)
 					{
-						if (++keyX1.counter >= 1000*1)//5s
+						if (++keyX1.counter >= 1000*MENU_INTRODUCTION_AFTERDELAY_SEG)//5s
 						{
 							keyX1.counter = 0x00;
+
+							PinTo1(PORTWxOUT_1, PINxOUT_1);
 							lcdan_print_Menu1();
 
 							keyX1.sm0 = 0;
@@ -749,7 +845,7 @@ int main(void)
 			{
 				if (keyX3.sm0 == 0)
 				{
-					lcdan_print_Menu3();
+					//lcdan_print_Menu3();//--> Se muestra en el primer toque
 					//
 					PinTo1(PORTWxOUT_4, PINxOUT_4);
 
@@ -788,6 +884,7 @@ int main(void)
 						if (++keyX3.counter >= 1000*8)
 						{
 							keyX3.counter = 0x0000;
+							keyX3.sm0++;
 						}
 					}
 				}
@@ -796,8 +893,18 @@ int main(void)
 					if (keyP2_job())
 					{
 						keyX3.f.job = 0;	//finish sequence
+
+						keyX3.sm0 = 0;
+						//
+						PinTo0(PORTWxOUT_3, PINxOUT_3);
+						PinTo0(PORTWxOUT_4, PINxOUT_4);
+						//
 						PinTo0(PORTWxBUZZER, PINxBUZZER);
 						buzzer = emptyJob;
+
+						//+ADD
+						keyA.f.enable = keyB.f.enable = keyC.f.enable = 1;//enable A,B,C
+
 					}
 				}
 			}
@@ -807,6 +914,7 @@ int main(void)
 				if (keyX4.sm0 == 0)
 				{
 					lcdan_print_Menu1();
+					PinTo1(PORTWxOUT_1, PINxOUT_1);
 					//
 					measVoltGenerador.f.job = 0;//kill meas.volt
 					measVoltBatt.f.job = 1;
@@ -822,6 +930,11 @@ int main(void)
 				{
 					measVoltBatt.f.job = 0;
 					lcdan_print_Introduction();	//x5seg
+
+					//
+					measVoltGenerador.f.job = 0;
+					measVoltGenerador.counter = 0x00;
+					//
 					//
 					keyX5.counter = 0x00;
 					keyX5.sm0++;
@@ -830,10 +943,11 @@ int main(void)
 				{
 					if (main_flag.f1ms)
 					{
-
 						if (++keyX5.counter >= 1000*MENU_INTRODUCTION_AFTERDELAY_SEG)//5s
 						{
 							lcdan_print_Menu2();
+							PinTo1(PORTWxOUT_2, PINxOUT_2);
+							//
 							keyX5.counter = 0x00;
 							keyX5.sm0 = 0;
 							keyX5.f.job = 0;
@@ -841,6 +955,7 @@ int main(void)
 							//desencadena en leer voltaje del generador
 							measVoltGenerador.f.job = 1;
 							measVoltGenerador.counter = 0x00;
+							//
 						}
 					}
 				}
@@ -851,11 +966,22 @@ int main(void)
 			 *Una vez que sus jobs=1, terminan por si solos,
 			 *aun asi cambiando de tecla
 			 */
+			/***************************
+			 * SERIA BUENO SEPARAR KEYP1 DE OTRO SECUENCERxP1 Y SECUENCERxP2
+			 **************************/
 			if (keyP1.f.job)
 			{
 				if (keyP1_job())
 				{
 					keyP1.f.job = 0;
+					//
+					keyP1.f.lock = 0;
+					keyP2.f.lock = 0;
+
+					PinTo0(PORTWxBUZZER, PINxBUZZER);
+					buzzer = emptyJob;
+					//
+					keyA.f.enable = keyB.f.enable = keyC.f.enable = 1;//Enable A,B,C
 				}
 			}
 			if (keyP2.f.job)
@@ -863,6 +989,11 @@ int main(void)
 				if (keyP2_job())
 				{
 					keyP2.f.job = 0;
+					//
+					keyP1.f.lock = 0;
+					keyP2.f.lock = 0;
+					//
+					keyA.f.enable = keyB.f.enable = keyC.f.enable = 1;//Enable A,B,C
 				}
 			}
 
@@ -893,8 +1024,8 @@ int main(void)
 					//
 					//print VoltGenerator
 					dtostrf(VoltGenerator, 0, 1, str);
-					strcat(str, " V      ");
-					lcdan_set_cursor(14, 3); lcdan_print_string(str);
+					strcat(str, "V     ");
+					lcdan_set_cursor(8, 3); lcdan_print_string(str);
 				}
 			}
 			//Buzzer
