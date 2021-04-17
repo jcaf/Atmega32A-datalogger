@@ -118,8 +118,8 @@ char str_batteryVoltType[10];
  * GND
  *
  */
-#define ADCH1_R1 100E3	//MEDIR
-#define ADCH1_R2 510E3	//MEDIR
+#define ADCH1_R1 100E3//100E3	//MEDIR 99.3
+#define ADCH1_R2 510E3	//510E3MEDIR
 #define ADC_AREF 5		//5V MEDIR
 #define ADC_TOP 1023	//KTE
 /*
@@ -156,7 +156,7 @@ float smoothGen_ADCHL=0;
 #define RELAY_TIMESWITCHING 40//ms Tiempo de conmutacion de Relays
 
 //delay x menu intro
-#define MENU_INTRODUCTION_AFTERDELAY_SEG 1//5 Seconds delay x Menu Introduccion
+#define MENU_INTRODUCTION_AFTERDELAY_SEG 5//5 Seconds delay x Menu Introduccion
 
 //buzzer delays
 #define BUZZER_TACTSW_KTIME 50	//50ms
