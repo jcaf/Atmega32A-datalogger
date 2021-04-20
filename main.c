@@ -82,8 +82,10 @@ struct _job measVoltBatt, measVoltGenerador;
 struct _job keyP1, keyP2;
 struct _job buzzer;
 struct _job progressBar;
+struct _job smoothAlgJob;
 //
-float smoothAlg(uint16_t *buffer);
+int8_t smoothAlg_nonblock(uint16_t *buffer, float *Answer);//Non-blocking
+float smoothAlg(uint16_t *buffer);//blocking
 #define SMOOTHALG_MAXSIZE 10
 uint16_t VoltBatt_buffer[SMOOTHALG_MAXSIZE];
 float VoltBatt = 0;
@@ -125,7 +127,33 @@ char str_batteryVoltType[10];
 /*
  * update VoltBatt
  */
-int8_t VoltBatt_get(void)//Non-blocking
+int8_t VoltBatt_get_nonblock(void)	//Non-blocking
+{
+	float smoothADCHL = 0;
+
+	if (measVoltBatt.sm0 == 0)
+	{
+		VoltBatt_buffer[measVoltBatt.counter] = ADC_read(ADC_CH_1);
+		if (++measVoltBatt.counter >= SMOOTHALG_MAXSIZE)
+		{
+			measVoltBatt.counter = 0x0000;
+			measVoltBatt.sm0++;
+		}
+	}
+	else if (measVoltBatt.sm0 == 1)
+	{
+		if (smoothAlg_nonblock(VoltBatt_buffer, &smoothADCHL))
+		{
+			measVoltBatt.sm0 = 0x0;
+			//
+			VoltBatt = (smoothADCHL * ADC_AREF * (ADCH1_R1 + ADCH1_R2) )/ (ADC_TOP * ADCH1_R1);
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int8_t VoltBatt_get(void)//Blocking
 {
 	float smoothADCHL = 0;
 	VoltBatt_buffer[measVoltBatt.counter] = ADC_read(ADC_CH_1);
@@ -522,6 +550,8 @@ int main(void)
 						outputs_clear();
 						keyA = keyB = keyC = keyX2 = keyX3 = keyX4 = keyX5 = emptyJob;
 						measVoltBatt = measVoltGenerador = emptyJob;
+						smoothAlgJob = emptyJob;
+
 						keyP1 = keyP2 = emptyJob;
 						PinTo0(PORTWxBUZZER, PINxBUZZER);
 						buzzer = emptyJob;
@@ -601,6 +631,7 @@ int main(void)
 								keyX2.f.lock = 1;//bloqueado
 								keyX3 = keyX4 = keyX5 = emptyJob;
 								measVoltBatt = measVoltGenerador = emptyJob;
+								smoothAlgJob = emptyJob;
 								progressBar = emptyJob;
 								//
 								keyX2.f.job = 1;
@@ -628,6 +659,7 @@ int main(void)
 							{
 								keyX2 = keyX4 = keyX5 = emptyJob;
 								measVoltBatt = measVoltGenerador = emptyJob;
+								smoothAlgJob = emptyJob;
 								//
 								PinTo0(PORTWxOUT_1, PINxOUT_1);
 								PinTo0(PORTWxOUT_2, PINxOUT_2);
@@ -676,6 +708,7 @@ int main(void)
 							{
 								keyX2 = keyX3 = keyX5 = emptyJob;
 								measVoltBatt = measVoltGenerador = emptyJob;
+								smoothAlgJob = emptyJob;
 								progressBar = emptyJob;
 								//
 								PinTo0(PORTWxOUT_1, PINxOUT_1);
@@ -704,6 +737,7 @@ int main(void)
 						{
 							keyX2 = keyX3 = keyX4 = emptyJob;
 							measVoltBatt = measVoltGenerador = emptyJob;
+							smoothAlgJob = emptyJob;
 							progressBar = emptyJob;
 
 							//
@@ -816,6 +850,8 @@ int main(void)
 							//desencadena en leer voltaje de bateria 12-24V nominal
 							measVoltBatt.f.job = 1;
 							measVoltBatt.counter = 0;
+							//
+							smoothAlgJob = emptyJob;
 						}
 					}
 				}
@@ -905,6 +941,8 @@ int main(void)
 					measVoltBatt.f.job = 0;	//kill meas.volt
 					measVoltGenerador.f.job = 1;
 					measVoltGenerador.counter = 0x00;
+					//
+					smoothAlgJob = emptyJob;
 				}
 			}
 			//
@@ -923,6 +961,8 @@ int main(void)
 					//kill both
 					measVoltBatt.f.job = 0;	//kill meas.volt
 					measVoltGenerador.f.job = 0;//kill meas.volt
+
+					smoothAlgJob = emptyJob;
 
 					//
 					keyX3.counter = 0x00;
@@ -992,6 +1032,8 @@ int main(void)
 					measVoltGenerador.f.job = 0;//kill meas.volt
 					measVoltBatt.f.job = 1;
 					measVoltBatt.counter = 0x0;
+
+					smoothAlgJob = emptyJob;
 					//
 					keyX4.f.job = 0;
 				}
@@ -1029,6 +1071,7 @@ int main(void)
 							measVoltGenerador.f.job = 1;
 							measVoltGenerador.counter = 0x00;
 							//
+							smoothAlgJob = emptyJob;
 						}
 					}
 				}
@@ -1226,3 +1269,67 @@ float smoothAlg(uint16_t *buffer)
 
 //
 
+//#define SMOOTHALG_MAXSIZE 10
+//uint16_t smoothAlg_buffer[SMOOTHALG_MAXSIZE];
+
+/*
+ * 1: job is finished
+ *
+ * buffer [IN]-> Puntero q contiene los datos almacenados
+ * Answer [OUT] -> Puntero hacia dato de salida
+ */
+struct _job smoothAlgJob;
+int8_t smoothAlg_nonblock(uint16_t *buffer, float *Answer)
+{
+	static float average=0;
+	static int Pos;	//# de elementos > que la media
+	static int Neg;	//# de elementos > que la media
+	static float TD;	//Total Deviation
+	//float A;	//Correct answer
+
+	//1- Calculate media
+	if (smoothAlgJob.sm0 == 0)
+	{
+		average = 0;
+		smoothAlgJob.counter = 0x0;
+		smoothAlgJob.sm0++;
+	}
+	if (smoothAlgJob.sm0 == 1)
+	{
+		average +=buffer[smoothAlgJob.counter];
+
+		if (++smoothAlgJob.counter >= SMOOTHALG_MAXSIZE)
+		{
+			average /= SMOOTHALG_MAXSIZE;
+			//
+			Pos = 0;
+			Neg = 0;
+			TD = 0;
+			smoothAlgJob.sm0++;
+		}
+	}
+	//2 - Find Pos and Neg + |Dtotal|
+	else if (smoothAlgJob.sm0 == 2)
+	{
+		if (buffer[smoothAlgJob.counter] > average)
+		{
+			Pos++;
+			TD += (buffer[smoothAlgJob.counter]-average);//Find |Dtotal|
+		}
+		if (buffer[smoothAlgJob.counter] < average)
+		{
+			Neg++;
+		}
+		//
+		if (++smoothAlgJob.counter >= SMOOTHALG_MAXSIZE)
+		{
+			smoothAlgJob.counter = 0;
+			smoothAlgJob.sm0 = 0;
+			//
+			*Answer = average + ( ( (Pos-Neg)*TD )/ (SMOOTHALG_MAXSIZE*SMOOTHALG_MAXSIZE));
+			return 1;
+			//
+		}
+	}
+	return 0;
+}
