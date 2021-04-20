@@ -531,30 +531,33 @@ int main(void)
 				 */
 				if (kb_key_is_ready2read(KB_LYOUT_KEY_X1))
 				{
-					//ON/OFF System
-					main_flag.X1onoff = !main_flag.X1onoff;
-
-					if (main_flag.X1onoff == 1)
+					if (!keyX1.f.lock)//X3 lock X1
 					{
-						lcdan_bklight_on();
-						keyX1.f.job = 1;
+						//ON/OFF System
+						main_flag.X1onoff = !main_flag.X1onoff;
 
-						buzzer.mode = BUZZERMODE_TACTSW;
-						buzzer.f.job = 1;
-					}
-					else
-					{
-						lcdan_clear();
-						lcdan_bklight_off();
-						//
-						outputs_clear();
-						keyA = keyB = keyC = keyX2 = keyX3 = keyX4 = keyX5 = emptyJob;
-						measVoltBatt = measVoltGenerador = emptyJob;
-						smoothAlgJob = emptyJob;
+						if (main_flag.X1onoff == 1)
+						{
+							lcdan_bklight_on();
+							keyX1.f.job = 1;
 
-						keyP1 = keyP2 = emptyJob;
-						PinTo0(PORTWxBUZZER, PINxBUZZER);
-						buzzer = emptyJob;
+							buzzer.mode = BUZZERMODE_TACTSW;
+							buzzer.f.job = 1;
+						}
+						else
+						{
+							lcdan_clear();
+							lcdan_bklight_off();
+							//
+							outputs_clear();
+							keyA = keyB = keyC = keyX2 = keyX3 = keyX4 = keyX5 = emptyJob;
+							measVoltBatt = measVoltGenerador = emptyJob;
+							smoothAlgJob = emptyJob;
+
+							keyP1 = keyP2 = emptyJob;
+							PinTo0(PORTWxBUZZER, PINxBUZZER);
+							buzzer = emptyJob;
+						}
 					}
 				}
 				if (main_flag.X1onoff == 1)
@@ -950,6 +953,7 @@ int main(void)
 			{
 				if (keyX3.sm0 == 0)
 				{
+					keyX1.f.lock = 1;
 					//EJEC #1
 					lcdan_print_Menu3();//--> Se muestra en el primer toque
 										//pero vuelvo a imprimir para que limpie el progressBar
@@ -1017,6 +1021,9 @@ int main(void)
 
 						//+ADD
 						keyA.f.enable = keyB.f.enable = keyC.f.enable = 1;//enable A,B,C
+
+						//ADD
+						keyX1.f.lock = 0;
 
 					}
 				}
