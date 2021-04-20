@@ -52,7 +52,8 @@ struct _main_flag
 {
 	unsigned f1ms :1;
 	unsigned X1onoff:1;
-	unsigned __a:6;
+	unsigned keysEnable:1;
+	unsigned __a:5;
 
 } main_flag;
 
@@ -553,14 +554,17 @@ int main(void)
 							keyA = keyB = keyC = keyX2 = keyX3 = keyX4 = keyX5 = emptyJob;
 							measVoltBatt = measVoltGenerador = emptyJob;
 							smoothAlgJob = emptyJob;
+							progressBar  = emptyJob;
 
 							keyP1 = keyP2 = emptyJob;
 							PinTo0(PORTWxBUZZER, PINxBUZZER);
 							buzzer = emptyJob;
+
+							main_flag.keysEnable = 0;
 						}
 					}
 				}
-				if (main_flag.X1onoff == 1)
+				if ( (main_flag.X1onoff == 1) && (main_flag.keysEnable) )
 				{
 					//A, B, C solo se activan cuando X2 y X3 estan activos
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_A))
@@ -580,7 +584,7 @@ int main(void)
 					if (kb_key_is_ready2read(KB_LYOUT_KEY_B))
 					{
 						if (keyB.f.enable)
-							{
+						{
 							if (keyB.f.lock == 0)
 							{
 								keyB.f.lock = 1;//B locked
@@ -640,13 +644,12 @@ int main(void)
 								keyX2.f.job = 1;
 								//
 
-
-								keyP1.f.enable = 1;//HABILITA BOTON P1 Y P2
+								//enable A,B,C + BOTON P1 Y P2
+								keyP1.f.enable = 1;
 								keyP2.f.enable = 1;
+								keyA.f.enable = keyB.f.enable = keyC.f.enable = 1;
 								//
-								keyA.f.enable = keyB.f.enable = keyC.f.enable = 1;//enable A,B,C
 
-								//
 								buzzer.mode = BUZZERMODE_TACTSW;
 								buzzer.sm0 = 0;
 								buzzer.f.job = 1;
@@ -749,11 +752,11 @@ int main(void)
 							//
 							keyX5.f.job = 1;
 
-							//Off other background/process/flags
-							keyP1.f.enable = 0;
-							keyP2.f.enable = 0;
+							//enable A,B,C + BOTON P1 Y P2
+							keyP1.f.enable = 1;
+							keyP2.f.enable = 1;
+							keyA.f.enable = keyB.f.enable = keyC.f.enable = 1;
 							//
-							keyA.f.enable = keyB.f.enable = keyC.f.enable = 0;//Disable A,B,C
 							//
 							buzzer.mode = BUZZERMODE_TACTSW;
 							buzzer.f.job = 1;
@@ -785,7 +788,6 @@ int main(void)
 									//
 								}
 							}
-
 						}
 						//pinGetLevel_clearChange(PGLEVEL_LYOUT_P1);//-->clear flush in while-end
 					}
@@ -855,6 +857,8 @@ int main(void)
 							measVoltBatt.counter = 0;
 							//
 							smoothAlgJob = emptyJob;
+							//Add
+							main_flag.keysEnable = 1;
 						}
 					}
 				}
@@ -946,6 +950,14 @@ int main(void)
 					measVoltGenerador.counter = 0x00;
 					//
 					smoothAlgJob = emptyJob;
+
+					//Add new: run KeyB sequence
+					keyB.f.lock = 1;//B locked
+					keyC.f.lock = 0;//C unlock
+					//
+					keyB.f.job = 1;
+					//
+
 				}
 			}
 			//
@@ -1079,6 +1091,13 @@ int main(void)
 							measVoltGenerador.counter = 0x00;
 							//
 							smoothAlgJob = emptyJob;
+
+							//Add new: run KeyB sequence
+							keyB.f.lock = 1;//B locked
+							keyC.f.lock = 0;//C unlock
+							//
+							keyB.f.job = 1;
+							//
 						}
 					}
 				}
@@ -1098,7 +1117,7 @@ int main(void)
 				{
 					keyP1.f.job = 0;
 					//
-					keyP1.f.lock = 0;
+					//keyP1.f.lock = 0;//P1 queda bloqueada y P2 lo desbloquea y viceversa
 					keyP2.f.lock = 0;
 
 					PinTo0(PORTWxBUZZER, PINxBUZZER);
@@ -1113,8 +1132,8 @@ int main(void)
 				{
 					keyP2.f.job = 0;
 					//
-					keyP1.f.lock = 0;
-					keyP2.f.lock = 0;
+					keyP1.f.lock = 0;//unlock P1
+					//keyP2.f.lock = 0;
 					//
 					keyA.f.enable = keyB.f.enable = keyC.f.enable = 1;//Enable A,B,C
 				}
