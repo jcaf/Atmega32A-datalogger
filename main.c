@@ -1062,6 +1062,8 @@ int main(void)
 			{
 				if (keyX5.sm0 == 0)
 				{
+					main_flag.keysEnable = 0;
+
 					measVoltBatt.f.job = 0;
 					lcdan_print_Introduction();	//x5seg
 
@@ -1079,6 +1081,8 @@ int main(void)
 					{
 						if (++keyX5.counter >= 1000*MENU_INTRODUCTION_AFTERDELAY_SEG)//5s
 						{
+							main_flag.keysEnable = 1;
+
 							lcdan_print_Menu2();
 							PinTo1(PORTWxOUT_2, PINxOUT_2);
 							//
