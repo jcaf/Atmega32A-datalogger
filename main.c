@@ -1,4 +1,8 @@
 /*
+ * Comandos para sincronizar localmente desde el respositorio
+ * git pull origin master
+ * git stash (1 vez)
+ *
  * main.c
  *
  *  Created on: Apr 13, 2021
@@ -1330,6 +1334,8 @@ int8_t smoothAlg_nonblock(uint16_t *buffer, float *Answer)
 
 		if (++smoothAlgJob.counter >= SMOOTHALG_MAXSIZE)
 		{
+			smoothAlgJob.counter = 0x0;
+
 			average /= SMOOTHALG_MAXSIZE;
 			//
 			Pos = 0;
